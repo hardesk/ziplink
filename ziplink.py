@@ -1,7 +1,6 @@
-from datetime import datetime
-import os, zipfile, pathlib, stat
-import zipapp
-import time
+import os, zipfile, stat
+import pathlib
+import logging
 
 class ziplink:
 
@@ -10,7 +9,7 @@ class ziplink:
     def extractall(z: zipfile.ZipFile, root: str = None):
         for zi in z.infolist():
             xa = zi.external_attr >> 16
-            #  print(f"name {zi.filename} size {zi.file_size} attr {zi.internal_attr:08x} xattr {zi.external_attr:08x} fmt {xa & ziplink.MODE_MASK:08x}")
+            # logging.debug(f"name {zi.filename} size {zi.file_size} attr {zi.internal_attr:08x} xattr {zi.external_attr:08x} fmt {xa & ziplink.MODE_MASK:08x}")
             
             if stat.S_ISLNK(xa):
                 f = os.path.join(root, zi.filename)
@@ -32,37 +31,45 @@ class ziplink:
         else:
             z.write(file, arcname)
 
-    # zip path will be stored into the archive and root will be not, it will be stripped
-    # zipsrc is a folder with optional mask (default is all files)
-    def addfolder(z: zipfile.ZipFile, zipsrc: pathlib.Path, root: pathlib.Path = None):
+    # zipsrc path will be stored into the archive with the 'zipcwd' prefix stripped if specified
+    # default mask is all files/folders
+    def addfolder(z: zipfile.ZipFile, zipsrc, zipcwd=None, mask: str=None):
 
-        g = pathlib.Path() / zipsrc
+        g = zipsrc if isinstance(zipsrc, os.PathLike) else pathlib.Path(zipsrc)
+        if zipcwd and not isinstance(zipcwd, os.PathLike): zipcwd = pathlib.Path(zipcwd)
 
-        mask = '*'
-        if not g.is_dir():
-            mask = g.name
-            g = g.parent
+        mask = mask if mask else '*'
 
-        for q in g.parts: 
-            ziplink.write(z, q)
+        if os.path.exists(g):
+            if os.path.isfile(g):
+                mask = g.name
+                g = g.parent
+        else:
+            # logging.debug(f"path {g} -> {g.absolute()} not found")
+            raise RuntimeError(f"{g} was not found or is not a directory")
 
-        if root:
-            g = root / g
         for x in g.rglob(mask):
-            arcname = x.relative_to(root) if root else x
-            # print(f"store '{x}' as '{arcname}'")
+            arcname = x.relative_to(zipcwd) if zipcwd else x
+            # logging.debug(f"store '{x}' as '{arcname}'")
             ziplink.write(z, x, arcname)
 
 def main():
+
+    logging.basicConfig(level=logging.DEBUG)
+
     s = pathlib.Path('tests')
     with zipfile.ZipFile("zz.zip", mode="w") as z:
         for file_path in s.rglob("*"):
             ziplink.write(z, file_path)
 
     with zipfile.ZipFile("T_z1.zip", mode="w") as z:
-        ziplink.addfolder(z, 'tests/*')
+        ziplink.addfolder(z, 'tests')
     with zipfile.ZipFile("T_z2.zip", mode="w") as z:
-        ziplink.addfolder(z, '*', 'tests')
+        ziplink.addfolder(z, 'tests', 'tests')
+    with zipfile.ZipFile("T_z3.zip", mode="w") as z:
+        ziplink.addfolder(z, 'tests', None, '*')
+    with zipfile.ZipFile("T_z4.zip", mode="w") as z:
+        ziplink.addfolder(z, 'tests', None, '*.txt')
 
     with zipfile.ZipFile('zz.zip') as z:
         ziplink.extractall(z, '__out_zz')

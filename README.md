@@ -15,8 +15,9 @@ with zipfile.ZipFile('arch.zip') as z:
 Packing
 ```python
 with zipfile.ZipFile('a1.zip', 'w') as z:
-    ziplink.addfolder(z, 'x/*') # add x/* at x/*
-    ziplink.addfolder(z, '*', 'y') # add x/* at *
+    ziplink.addfolder(z, 'x') # add x/* at x/*
+    ziplink.addfolder(z, 'y', 'y') # add y/* at zip's root
+    ziplink.addfolder(z, 'z', 'z', '*.txt') # add z/* at zip's root, but only .txt files
 ```
 
 Or, you can add the files one by one
